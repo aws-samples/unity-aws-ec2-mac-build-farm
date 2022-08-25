@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  EEKeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: The EC2 key pair for all instances
+  VPCEndpointServiceName:
+    Type: String
+    Default: com.amazonaws.vpce.us-east-2.vpce-svc-0f81f0171625f8d8c
+    Description: URL of the Unity Build Server endpoint service (to create a VPC endpoint)
+Resources:
+  VPC:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: stacks/vpc.yaml
+      Parameters:
+        VPCEndpointServiceName:
+          !Ref VPCEndpointServiceName
+  
+  # Dedicated host hardcoded in us-east-2b
+  # Separate stack to simplify debug, can combine with mac instance later
+  MacDedicatedHost:
+   Type: AWS::CloudFormation::Stack
+   Properties:
+     TemplateURL: stacks/mac_dedicated_host.yaml
+  
+  MacInstance:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: stacks/mac.yaml
+      Parameters:
+        VPCId:
+          !GetAtt VPC.Outputs.VPCId
+        PrivateSubnet:
+        # PrivateSubnet2 in az 'us-east-2b'
+          !GetAtt VPC.Outputs.PrivateSubnet2
+        DedicatedHost:
+          !GetAtt MacDedicatedHost.Outputs.DedicatedHost
+        MacSecurityGroup:
+          !GetAtt JenkinsInstances.Outputs.MacSecurityGroup
+        MacIamInstanceProfile:
+          !GetAtt JenkinsInstances.Outputs.MacIamInstanceProfile
+        KeyName: !Ref EEKeyPair
+
+  JenkinsInstances:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: stacks/jenkins_instances.yaml
+      Parameters:
+        VPCId:
+          !GetAtt VPC.Outputs.VPCId
+        PublicSubnet1:
+          !GetAtt VPC.Outputs.PublicSubnet1
+        PrivateSubnet1:
+          !GetAtt VPC.Outputs.PrivateSubnet1
+        PrivateSubnet2:
+          !GetAtt VPC.Outputs.PrivateSubnet2
+        PrivateSubnet3:
+          !GetAtt VPC.Outputs.PrivateSubnet3
+        KeyName: !Ref EEKeyPair
+
+Outputs:
+  BastionHost:
+    Description: Bastion hostname, connect from Internet (ssh -i <key> -L 5900:<mac>:5900 -L 8080:<jenkins>:8080 ec2-user@<bastion>)
+    Value:
+      !GetAtt JenkinsInstances.Outputs.BastionHost
+  JenkinsHost:
+    Description: Jenkins
+    Value:
+      !GetAtt JenkinsInstances.Outputs.JenkinsHost
+  MacHost:
+    Description: Mac
+    Value:
+      !GetAtt MacInstance.Outputs.MacHost
+  JenkinsManagerRole:
+    Description: IAM role to setup Jenkins EC2 Fleet plugin
+    Value:
+      !GetAtt JenkinsInstances.Outputs.JenkinsManagerRoleArn
+  VPCEndpoint:
+    Description: VPC Endpoint URL
+    Value:
+      !GetAtt VPC.Outputs.VPCEndpoint
+
+  

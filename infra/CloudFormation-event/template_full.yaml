@@ -1,0 +1,702 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  EEKeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: The EC2 key pair for all instances
+  VPCEndpointServiceName:
+    Type: String
+    Default: com.amazonaws.vpce.us-east-2.vpce-svc-0f81f0171625f8d8c
+    Description: URL of the Unity Build Server endpoint service (to create a VPC endpoint)
+  LatestAmiId:
+    Type:  'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+  BastionSSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  SSMManagedInstancePolicy:
+    Type: String
+    Description: 'ARN of the AWS-managed AmazonSSMManagedInstanceCore policy to allow SSM-management'
+    Default: arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+Resources:
+  #VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.6.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: build/VPC
+  VPCPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.101.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: build/VPC/VPCPublicSubnet1
+  VPCPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.102.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicSubnet2
+  VPCPublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.103.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2c
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicSubnet3
+  VPCPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.1.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: build/VPC/VPCPrivateSubnet1
+  VPCPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.2.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateSubnet2
+  VPCPrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.3.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2c
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateSubnet3
+  VPCPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicRouteTable
+  VPCPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateRouteTable
+  VPCPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      SubnetId:
+        Ref: VPCPublicSubnet1
+  VPCPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      SubnetId:
+        Ref: VPCPublicSubnet2
+  VPCPublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      SubnetId:
+        Ref: VPCPublicSubnet3
+  VPCPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      SubnetId:
+        Ref: VPCPrivateSubnet1
+  VPCPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      SubnetId:
+        Ref: VPCPrivateSubnet2
+  VPCPrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      SubnetId:
+        Ref: VPCPrivateSubnet3
+  VPCPublicSubnet1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: build/NAT_GW_EIP
+  VPCPublicSubnet1NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - VPCPublicSubnet1EIP
+          - AllocationId
+      SubnetId:
+        Ref: VPCPublicSubnet1
+      Tags:
+        - Key: Name
+          Value: vpc/VPC/NATGW
+  VPCPrivateRouteTableDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: VPCPublicSubnet1NATGateway
+  VPCIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: vpc/VPC/IGW
+  VPCIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: VPCIGW
+  VPCPublicRouteTableDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: VPCIGW
+  VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName:
+        Ref: VPCEndpointServiceName
+      SubnetIds:
+        - !Ref VPCPrivateSubnet1
+        - !Ref VPCPrivateSubnet2
+        - !Ref VPCPrivateSubnet3
+      VpcEndpointType: Interface
+      # PrivateDnsEnabled: true
+      VpcId:
+        Ref: VPC
+  VPCEndpointSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: LICENSE_SERVER_ENDPOINT
+      Description: VPC endpoint to connect to Unity Build Server 
+      # DnsEntries return a list of key-value pairs like this:
+      # ["Z1HUB23UULQXV:vpce-01abc23456de78f9g-12abccd3.ec2.us-east-1.vpce.amazonaws.com", "Z1HUB23UULQXV:vpce-01abc23456de78f9g-12abccd3-us-east-1a.ec2.us-east-1.vpce.amazonaws.com", "Z1C12344VYDITB0:ec2.us-east-1.amazonaws.com"]
+      # we are taking the first element which represents regional DNS and append http:// before and :8080 after
+      SecretString:
+        !Join
+          - ""
+          - - "http://"
+            - !Select
+                - 1
+                - !Split
+                  - ":"
+                  - !Select
+                    - 0
+                    - !GetAtt VPCEndpoint.DnsEntries 
+            - ":8080"
+  
+  # Dedicated host hardcoded in us-east-2b
+  # Separate stack to simplify debug, can combine with mac instance later
+  #MacDedicatedHost:
+  # Type: AWS::CloudFormation::Stack
+  # Properties:
+  #   TemplateURL: stacks/mac_dedicated_host.yaml
+  
+  #DedicatedHost:
+  #  Type: AWS::EC2::Host
+  #  Properties: 
+  #    AutoPlacement: 'off'
+  #    AvailabilityZone: us-east-2b
+  #    InstanceType: mac1.metal
+  
+  #MacInstance:
+  #  Type: AWS::EC2::Instance
+  #  Properties:
+  #    InstanceType: mac1.metal
+  #    Affinity: host
+  #    HostId: !Ref DedicatedHost
+  #    SubnetId: !Ref 'PrivateSubnet'
+  #    SecurityGroupIds: [!Ref 'MacSecurityGroup']
+      # We can provide a golden image, need to check if its allowed from licensing perspective
+      # We are using default Big Sur for now
+  #    ImageId: !Ref AmiId
+  #    IamInstanceProfile: !Ref MacIamInstanceProfile
+  #    KeyName: !Ref EEKeyPair
+  #    BlockDeviceMappings:
+  #      - DeviceName: /dev/sda1
+  #        Ebs:
+  #          VolumeSize: 300
+  #    UserData:
+  #      Fn::Base64: !Sub |
+  #        #!/bin/bash -xe
+  #        # increase disk size
+  #        PDISK=$(diskutil list physical external | head -n1 | cut -d" " -f1)
+  #        APFSCONT=$(diskutil list physical external | grep "Apple_APFS" | tr -s " " | cut -d" " -f8)
+  #        yes | diskutil repairDisk $PDISK
+  #        diskutil apfs resizeContainer $APFSCONT 0
+  #        # install xcode can be added later, need to check if its allowed from licensing perspective
+  #    Tags:
+  #      - Key: Name
+  #        Value: build/mac
+  
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: !Ref 'BastionSSHLocation'
+      Tags:
+        - Key: Name
+          Value: build/bastion-sg
+  JenkinsManagerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and web access from bastion host
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 8080
+        ToPort: 8080
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: build/jenkins-manager-sg
+  SpotWorkersSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH from jenkins-manager and bastion
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref JenkinsManagerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: build/jenkins-workers-sg
+  MacSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and VNC from bastion
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref JenkinsManagerSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 5900
+        ToPort: 5905
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: build/mac-sg
+
+# IAM roles for instances
+# Default - SSM only (for bastion, etc)
+  DefaultRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref SSMManagedInstancePolicy
+  DefaultInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "DefaultRole"
+
+  #  SpotAgentRole: read Secrets from Secrets Manager
+  SecretsManagerAccessForSpot:
+    Type: AWS::IAM::ManagedPolicy
+    Properties: 
+      Description: Allow Spot workers access to the Secrets Manager
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - secretsmanager:GetResourcePolicy
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+              - secretsmanager:ListSecretVersionIds
+              - secretsmanager:ListSecrets
+            Resource: '*'
+
+# Allow spot worker to pull images from ECR
+  # ECRRegistryAccessForAgents:
+  #   Type: AWS::IAM::ManagedPolicy
+  #   Properties: 
+  #     Description: Allow Spot agents to pull docker images from ECR
+  #     PolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Effect: Allow
+  #           Action:
+  #             - ecr:DescribeImages
+  #             - ecr:DescribeRepositories
+  #           Resource: !GetAtt ECRUnityRegistry.Arn
+  SpotAgentRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref SSMManagedInstancePolicy
+        - !Ref SecretsManagerAccessForSpot
+        # - !Ref ECRRegistryAccessForAgents
+  SpotAgentProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: SpotAgentRole
+
+#  JenkinsManagerRole: manage EC2 for EC2 Fleet plugin, pull images from ECR (or worker does this?), write to s3
+  AWSAccessForJenkinsEC2FleetPlugin:
+    Type: AWS::IAM::ManagedPolicy
+    Properties: 
+      Description: Allow necessary EC2, autoscaling and IAM actions for Jenkins EC2 Fleet plugin
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ec2:DescribeSpotFleetInstances'
+              - 'ec2:ModifySpotFleetRequest'
+              - 'ec2:CreateTags'
+              - 'ec2:DescribeRegions'
+              - 'ec2:DescribeInstances'
+              - 'ec2:TerminateInstances'
+              - 'ec2:DescribeInstanceStatus'
+              - 'ec2:DescribeSpotFleetRequests'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'autoscaling:DescribeAutoScalingGroups'
+              - 'autoscaling:UpdateAutoScalingGroup'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'iam:ListInstanceProfiles'
+              - 'iam:ListRoles'
+              - 'iam:PassRole'
+            Resource: '*'
+
+  JenkinsManagerRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref SSMManagedInstancePolicy
+        - !Ref AWSAccessForJenkinsEC2FleetPlugin
+  JenkinsManagerInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "JenkinsManagerRole"
+
+#  MacRole: read Secrets from Secrets manager
+  SecretsManagerAccessForMac:
+    Type: AWS::IAM::ManagedPolicy
+    Properties: 
+      Description: Allow EC2 Mac access to Secrets Manager
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - secretsmanager:GetResourcePolicy
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+              - secretsmanager:ListSecretVersionIds
+              - secretsmanager:ListSecrets
+              - secretsmanager:CreateSecret
+            Resource: '*'
+
+  MacRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref SSMManagedInstancePolicy
+        - !Ref SecretsManagerAccessForMac
+  MacInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "MacRole"
+
+# Instances
+  JenkinsManagerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.small
+      SubnetId: !Ref 'VPCPrivateSubnet1'
+      SecurityGroupIds: [!Ref 'JenkinsManagerSecurityGroup']
+      ImageId: !Ref 'LatestAmiId'
+      IamInstanceProfile: !Ref JenkinsManagerInstanceProfile
+      KeyName: !Ref EEKeyPair
+      BlockDeviceMappings:
+      - DeviceName: /dev/xvda1
+        Ebs:
+          VolumeSize: 30
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # yum update -y
+          sudo amazon-linux-extras install java-openjdk11 -y
+          yum install -y git 
+          sudo tee /etc/yum.repos.d/jenkins.repo<<EOF
+          [jenkins]
+          name=Jenkins
+          baseurl=http://pkg.jenkins.io/redhat
+          gpgcheck=0
+          EOF
+          rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
+          amazon-linux-extras install epel -y
+          yum install -y jenkins
+          systemctl enable jenkins
+          systemctl start jenkins
+      Tags:
+        - Key: Name
+          Value: build/jenkins-manager
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.nano
+      SubnetId: !Ref 'VPCPublicSubnet1'
+      SecurityGroupIds: [!Ref 'BastionSecurityGroup']
+      ImageId: !Ref 'LatestAmiId'
+      IamInstanceProfile: !Ref DefaultInstanceProfile
+      KeyName: !Ref EEKeyPair
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+      Tags:
+        - Key: Name
+          Value: build/bastion
+
+# ASG on spot for workers
+  SpotWorkersASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      DesiredCapacity: '1'      
+      MaxSize: '2'
+      MinSize: '0'
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandBaseCapacity: 0
+          OnDemandPercentageAboveBaseCapacity: 0
+          SpotAllocationStrategy: capacity-optimized-prioritized
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId:
+              Ref: SpotWorkerLaunchTemplate
+            Version: '1'
+          Overrides:
+            - InstanceType: c5.4xlarge
+            - InstanceType: c5a.4xlarge
+            - InstanceType: c5n.4xlarge
+            - InstanceType: c5ad.4xlarge
+            - InstanceType: c5d.4xlarge
+            - InstanceType: c4.4xlarge
+            - InstanceType: m5.4xlarge
+            - InstanceType: m5a.4xlarge
+            - InstanceType: m4.4xlarge  
+            - InstanceType: m5n.4xlarge
+      VPCZoneIdentifier:
+      - Ref: VPCPrivateSubnet1
+      - Ref: VPCPrivateSubnet2
+      - Ref: VPCPrivateSubnet3
+  SpotWorkerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: build/spot-worker-lt
+      LaunchTemplateData:
+        ImageId: !Ref 'LatestAmiId'
+        BlockDeviceMappings: 
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 60
+        IamInstanceProfile:
+          Name: !Ref SpotAgentProfile
+        SecurityGroupIds:
+          - !Ref SpotWorkersSecurityGroup
+        KeyName: !Ref EEKeyPair
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            yum update -y
+            yum install -y java git docker
+            systemctl enable docker
+            systemctl start docker
+            usermod -aG docker ec2-user
+            chmod 777 /var/run/docker.sock
+        TagSpecifications:
+        - ResourceType: instance
+          Tags:
+          - Key: Name
+            Value: build/spot-worker
+
+Outputs:
+  BastionHost:
+    Description: Bastion hostname, connect from Internet (ssh -i <key> -L 5900:<mac>:5900 -L 8080:<jenkins>:8080 ec2-user@<bastion>)
+    Value:
+      !GetAtt BastionInstance.PublicDnsName
+  JenkinsHost:
+    Description: Jenkins
+    Value:
+      !GetAtt JenkinsManagerInstance.PrivateDnsName
+  #MacHost:
+  #  Description: Mac
+  #  Value:
+  #    !GetAtt MacInstance.PrivateDnsName
+  VPCEndpoint:
+    Description: DNS names of VPC endpoint to connect to Unity Build Server
+    Value:
+      !Select
+        - 1
+        - !Split
+          - ":"
+          - !Select
+            - 0
+            - !GetAtt VPCEndpoint.DnsEntries 
+  #DedicatedHost:
+  #  Description: EC2 Mac dedicated host id
+  #  Value: !Ref DedicatedHost
+  VPCId:
+    Description: The VPC ID
+    Value: !Ref VPC
+  PublicSubnet1:
+    Description: Public Subnet 1 ID
+    Value: !Ref VPCPublicSubnet1
+  PrivateSubnet1:
+    Description: Private Subnet 1 ID
+    Value: !Ref VPCPrivateSubnet1
+  PrivateSubnet2:
+    Description: Private Subnet 2 ID
+    Value: !Ref VPCPrivateSubnet2
+  PrivateSubnet3:
+    Description: Private Subnet 3 ID
+    Value: !Ref VPCPrivateSubnet3
+  MacSecurityGroup:
+    Description: SG ID for EC2 Mac
+    Value: !Ref MacSecurityGroup
+  MacIamInstanceProfile:
+    Description: IAM instance profile for EC2 Mac
+    Value: !Ref MacInstanceProfile
+  JenkinsManagerRole:
+    Description: ARN of Jenkins manager role (to be used with EC2 Fleet Jenkins plugin)
+    Value: !GetAtt JenkinsManagerRole.Arn
+
+  

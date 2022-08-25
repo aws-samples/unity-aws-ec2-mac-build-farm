@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: The EC2 key pair for all instances
+Resources:
+  VPC:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: stacks/vpc.yaml
+  
+  # Dedicated host hardcoded in us-east-2b
+  # Separate stack to simplify debug, can combine with mac instance later
+  MacDedicatedHost:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: stacks/mac_dedicated_host.yaml
+  
+  MacInstance:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: stacks/mac.yaml
+      Parameters:
+        VPCId:
+          !GetAtt VPC.Outputs.VPCId
+        PrivateSubnet:
+        # PrivateSubnet2 in az 'us-east-2b'
+          !GetAtt VPC.Outputs.PrivateSubnet2
+        DedicatedHost:
+          !GetAtt MacDedicatedHost.Outputs.DedicatedHost
+        MacSecurityGroup:
+          !GetAtt JenkinsInstances.Outputs.MacSecurityGroup
+        MacIamInstanceProfile:
+          !GetAtt JenkinsInstances.Outputs.MacIamInstanceProfile
+        KeyName: !Ref KeyName
+
+  JenkinsInstances:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: stacks/jenkins_instances.yaml
+      Parameters:
+        VPCId:
+          !GetAtt VPC.Outputs.VPCId
+        PublicSubnet1:
+          !GetAtt VPC.Outputs.PublicSubnet1
+        PrivateSubnet1:
+          !GetAtt VPC.Outputs.PrivateSubnet1
+        PrivateSubnet2:
+          !GetAtt VPC.Outputs.PrivateSubnet2
+        KeyName: !Ref KeyName
+
+Outputs:
+  BastionHost:
+    Description: Bastion hostname, connect from Internet (ssh -i <key> -L 5900:<mac>:5900 -L 8080:<jenkins>:8080 ec2-user@<bastion>)
+    Value:
+      !GetAtt JenkinsInstances.Outputs.BastionHost
+  JenkinsHost:
+    Description: Jenkins
+    Value:
+      !GetAtt JenkinsInstances.Outputs.JenkinsHost
+  UnityBuildServerHost:
+    Description: Unity build server
+    Value:
+      !GetAtt JenkinsInstances.Outputs.UnityBuildServerHost
+  MacHost:
+    Description: Mac
+    Value:
+      !GetAtt MacInstance.Outputs.MacHost
+  JenkinsManagerRole:
+    Description: IAM role to setup Jenkins EC2 Fleet plugin
+    Value:
+      !GetAtt JenkinsInstances.Outputs.JenkinsManagerRoleArn
+  ECRRegistry:
+    Description: ECR registry to store Unity images
+    Value:
+      !GetAtt JenkinsInstances.Outputs.ECRRegistry
+  

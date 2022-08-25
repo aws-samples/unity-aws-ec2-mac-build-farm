@@ -1,0 +1,248 @@
+Parameters:
+  VPCEndpointServiceName:
+    Type: String
+    Description: Service name (com.amazonaws.vpce......) of PrivateLink Endpoint service to connect to Unity Build Server
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.6.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: build/VPC
+  VPCPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.101.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicSubnet1
+  VPCPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.102.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicSubnet2
+  VPCPublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.103.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2c
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicSubnet3
+  VPCPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.1.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateSubnet1
+  VPCPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.2.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateSubnet2
+  VPCPrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.3.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2c
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateSubnet3
+  VPCPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicRouteTable
+  VPCPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateRouteTable
+  VPCPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      SubnetId:
+        Ref: VPCPublicSubnet1
+  VPCPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      SubnetId:
+        Ref: VPCPublicSubnet2
+  VPCPublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      SubnetId:
+        Ref: VPCPublicSubnet3
+  VPCPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      SubnetId:
+        Ref: VPCPrivateSubnet1
+  VPCPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      SubnetId:
+        Ref: VPCPrivateSubnet2
+  VPCPrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      SubnetId:
+        Ref: VPCPrivateSubnet3
+  VPCPublicSubnet1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: build/NAT_GW_EIP
+  VPCPublicSubnet1NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - VPCPublicSubnet1EIP
+          - AllocationId
+      SubnetId:
+        Ref: VPCPublicSubnet1
+      Tags:
+        - Key: Name
+          Value: vpc/VPC/NATGW
+  VPCPrivateRouteTableDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: VPCPublicSubnet1NATGateway
+  VPCIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: vpc/VPC/IGW
+  VPCIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: VPCIGW
+  VPCPublicRouteTableDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: VPCIGW
+  VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName:
+        Ref: VPCEndpointServiceName
+      SubnetIds:
+        - !Ref VPCPrivateSubnet1
+        - !Ref VPCPrivateSubnet2
+        - !Ref VPCPrivateSubnet3
+      VpcEndpointType: Interface
+      # PrivateDnsEnabled: true
+      VpcId:
+        Ref: VPC
+  VPCEndpointSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: LICENSE_SERVER_ENDPOINT
+      Description: VPC endpoint to connect to Unity Build Server 
+      # DnsEntries return a list of key-value pairs like this:
+      # ["Z1HUB23UULQXV:vpce-01abc23456de78f9g-12abccd3.ec2.us-east-1.vpce.amazonaws.com", "Z1HUB23UULQXV:vpce-01abc23456de78f9g-12abccd3-us-east-1a.ec2.us-east-1.vpce.amazonaws.com", "Z1C12344VYDITB0:ec2.us-east-1.amazonaws.com"]
+      # we are taking the first element which represents regional DNS and append http:// before and :8080 after
+      SecretString:
+        !Join
+          - ""
+          - - "http://"
+            - !Select
+                - 1
+                - !Split
+                  - ":"
+                  - !Select
+                    - 0
+                    - !GetAtt VPCEndpoint.DnsEntries 
+            - ":8080"
+
+Outputs:
+  VPCId:
+    Description: The VPC ID
+    Value: !Ref VPC
+  PublicSubnet1:
+    Description: Public Subnet 1 ID
+    Value: !Ref VPCPublicSubnet1
+  PrivateSubnet1:
+    Description: Private Subnet 1 ID
+    Value: !Ref VPCPrivateSubnet1
+  PrivateSubnet2:
+    Description: Private Subnet 2 ID
+    Value: !Ref VPCPrivateSubnet2
+  PrivateSubnet3:
+    Description: Private Subnet 3 ID
+    Value: !Ref VPCPrivateSubnet3
+  VPCEndpoint:
+    Description: DNS names of VPC endpoint to connect to Unity Build Server
+    Value:
+      !Select
+        - 1
+        - !Split
+          - ":"
+          - !Select
+            - 0
+            - !GetAtt VPCEndpoint.DnsEntries 

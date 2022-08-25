@@ -1,0 +1,160 @@
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.6.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: build/VPC
+  VPCPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.101.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicSubnet1
+  VPCPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.102.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicSubnet2
+  VPCPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.1.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateSubnet1
+  VPCPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.6.2.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateSubnet2
+  VPCPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: build/VPC/PublicRouteTable
+  VPCPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: build/VPC/PrivateRouteTable
+  VPCPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      SubnetId:
+        Ref: VPCPublicSubnet1
+  VPCPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      SubnetId:
+        Ref: VPCPublicSubnet2
+  VPCPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      SubnetId:
+        Ref: VPCPrivateSubnet1
+  VPCPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      SubnetId:
+        Ref: VPCPrivateSubnet2
+  VPCPublicSubnet1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: build/NAT_GW_EIP
+  VPCPublicSubnet1NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - VPCPublicSubnet1EIP
+          - AllocationId
+      SubnetId:
+        Ref: VPCPublicSubnet1
+      Tags:
+        - Key: Name
+          Value: vpc/VPC/NATGW
+  VPCPrivateRouteTableDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: VPCPrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: VPCPublicSubnet1NATGateway
+  VPCIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: vpc/VPC/IGW
+  VPCIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: VPCIGW
+  VPCPublicRouteTableDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: VPCIGW
+Outputs:
+  VPCId:
+    Description: The VPC ID
+    Value: !Ref VPC
+  PublicSubnet1:
+    Description: Public Subnet 1 ID
+    Value: !Ref VPCPublicSubnet1
+  PrivateSubnet1:
+    Description: Private Subnet 1 ID
+    Value: !Ref VPCPrivateSubnet1
+  PrivateSubnet2:
+    Description: Private Subnet 2 ID
+    Value: !Ref VPCPrivateSubnet2

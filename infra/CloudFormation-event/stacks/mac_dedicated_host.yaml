@@ -1,0 +1,13 @@
+Resources:
+  DedicatedHost:
+  # Looks like tags for dedicated hosts are not supported in CFN
+    Type: AWS::EC2::Host
+    Properties: 
+      AutoPlacement: 'off'
+      AvailabilityZone: us-east-2b
+      InstanceType: mac1.metal
+
+Outputs:
+  DedicatedHost:
+    Description: EC2 Mac dedicated host id
+    Value: !Ref DedicatedHost

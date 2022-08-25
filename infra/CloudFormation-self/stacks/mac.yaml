@@ -1,0 +1,58 @@
+Parameters:
+  VPCId:
+    Type: String
+    Description: VPC ID will be passed by the parent stack
+  PrivateSubnet:
+    Type: String
+    Description: Private Subnet 1 will be passed by the parent stack
+  DedicatedHost:
+    Type: String
+    Description: Id of a dedicated host to run the mac instance on
+  MacSecurityGroup:
+    Type: String
+    Description: Id of SG for Mac
+  MacIamInstanceProfile:
+    Type:  String
+    Description: IAM Instance profile for for Mac
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: The EC2 key pair for all instances
+  AmiId:
+    Type:  String
+    Default: ami-0ef98d91ff9126a43
+
+Resources:
+  MacInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: mac1.metal
+      Affinity: host
+      HostId: !Ref DedicatedHost
+      SubnetId: !Ref 'PrivateSubnet'
+      SecurityGroupIds: [!Ref 'MacSecurityGroup']
+      # We can provide a golden image, need to check if its allowed from licensing perspective
+      # We are using default Big Sur for now
+      ImageId: !Ref AmiId
+      IamInstanceProfile: !Ref MacIamInstanceProfile
+      KeyName: !Ref KeyName
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 300
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # increase disk size
+          PDISK=$(diskutil list physical external | head -n1 | cut -d" " -f1)
+          APFSCONT=$(diskutil list physical external | grep "Apple_APFS" | tr -s " " | cut -d" " -f8)
+          yes | diskutil repairDisk $PDISK
+          diskutil apfs resizeContainer $APFSCONT 0
+          # install xcode can be added later, need to check if its allowed from licensing perspective
+      Tags:
+        - Key: Name
+          Value: build/mac
+
+Outputs:
+  MacHost:
+    Description: Mac
+    Value: !GetAtt MacInstance.PrivateDnsName

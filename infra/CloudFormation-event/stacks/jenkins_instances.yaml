@@ -1,0 +1,422 @@
+Parameters:
+  VPCId:
+    Type: String
+    Description: VPC ID will be passed by the parent stack
+  PublicSubnet1:
+    Type: String
+    Description: Public Subnet 1 will be passed by the parent stack
+  PrivateSubnet1:
+    Type: String
+    Description: Private Subnet 1 will be passed by the parent stack
+  PrivateSubnet2:
+    Type: String
+    Description: Private Subnet 2 will be passed by the parent stack
+  PrivateSubnet3:
+    Type: String
+    Description: Private Subnet 3 will be passed by the parent stack
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: The EC2 key pair for all instances
+  LatestAmiId:
+    Type:  'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+  BastionSSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  SSMManagedInstancePolicy:
+    Type: String
+    Description: 'ARN of the AWS-managed AmazonSSMManagedInstanceCore policy to allow SSM-management'
+    Default: arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+Resources:
+# Security groups
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      VpcId: !Ref 'VPCId'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: !Ref 'BastionSSHLocation'
+      Tags:
+        - Key: Name
+          Value: build/bastion-sg
+  JenkinsManagerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and web access from bastion host
+      VpcId: !Ref 'VPCId'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 8080
+        ToPort: 8080
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: build/jenkins-manager-sg
+  SpotWorkersSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH from jenkins-manager and bastion
+      VpcId: !Ref 'VPCId'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref JenkinsManagerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: build/jenkins-workers-sg
+  MacSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and VNC from bastion
+      VpcId: !Ref 'VPCId'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref JenkinsManagerSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 5900
+        ToPort: 5905
+        SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: build/mac-sg
+
+# IAM roles for instances
+# Default - SSM only (for bastion, etc)
+  DefaultRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref SSMManagedInstancePolicy
+  DefaultInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "DefaultRole"
+
+  #  SpotAgentRole: read Secrets from Secrets Manager
+  SecretsManagerAccessForSpot:
+    Type: AWS::IAM::ManagedPolicy
+    Properties: 
+      Description: Allow Spot workers access to the Secrets Manager
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - secretsmanager:GetResourcePolicy
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+              - secretsmanager:ListSecretVersionIds
+              - secretsmanager:ListSecrets
+            Resource: '*'
+
+# Allow spot worker to pull images from ECR
+  # ECRRegistryAccessForAgents:
+  #   Type: AWS::IAM::ManagedPolicy
+  #   Properties: 
+  #     Description: Allow Spot agents to pull docker images from ECR
+  #     PolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Effect: Allow
+  #           Action:
+  #             - ecr:DescribeImages
+  #             - ecr:DescribeRepositories
+  #           Resource: !GetAtt ECRUnityRegistry.Arn
+  SpotAgentRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref SSMManagedInstancePolicy
+        - !Ref SecretsManagerAccessForSpot
+        # - !Ref ECRRegistryAccessForAgents
+  SpotAgentProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: SpotAgentRole
+
+#  JenkinsManagerRole: manage EC2 for EC2 Fleet plugin, pull images from ECR (or worker does this?), write to s3
+  AWSAccessForJenkinsEC2FleetPlugin:
+    Type: AWS::IAM::ManagedPolicy
+    Properties: 
+      Description: Allow necessary EC2, autoscaling and IAM actions for Jenkins EC2 Fleet plugin
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ec2:DescribeSpotFleetInstances'
+              - 'ec2:ModifySpotFleetRequest'
+              - 'ec2:CreateTags'
+              - 'ec2:DescribeRegions'
+              - 'ec2:DescribeInstances'
+              - 'ec2:TerminateInstances'
+              - 'ec2:DescribeInstanceStatus'
+              - 'ec2:DescribeSpotFleetRequests'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'autoscaling:DescribeAutoScalingGroups'
+              - 'autoscaling:UpdateAutoScalingGroup'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'iam:ListInstanceProfiles'
+              - 'iam:ListRoles'
+              - 'iam:PassRole'
+            Resource: '*'
+
+  JenkinsManagerRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref SSMManagedInstancePolicy
+        - !Ref AWSAccessForJenkinsEC2FleetPlugin
+  JenkinsManagerInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "JenkinsManagerRole"
+
+#  MacRole: read Secrets from Secrets manager
+  SecretsManagerAccessForMac:
+    Type: AWS::IAM::ManagedPolicy
+    Properties: 
+      Description: Allow EC2 Mac access to Secrets Manager
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - secretsmanager:GetResourcePolicy
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+              - secretsmanager:ListSecretVersionIds
+              - secretsmanager:ListSecrets
+              - secretsmanager:CreateSecret
+            Resource: '*'
+
+  MacRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref SSMManagedInstancePolicy
+        - !Ref SecretsManagerAccessForMac
+  MacInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "MacRole"
+
+# Instances
+  JenkinsManagerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.small
+      SubnetId: !Ref 'PrivateSubnet1'
+      SecurityGroupIds: [!Ref 'JenkinsManagerSecurityGroup']
+      ImageId: !Ref 'LatestAmiId'
+      IamInstanceProfile: !Ref JenkinsManagerInstanceProfile
+      KeyName: !Ref KeyName
+      BlockDeviceMappings:
+      - DeviceName: /dev/xvda1
+        Ebs:
+          VolumeSize: 30
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # yum update -y
+          yum install -y java git 
+          sudo tee /etc/yum.repos.d/jenkins.repo<<EOF
+          [jenkins]
+          name=Jenkins
+          baseurl=http://pkg.jenkins.io/redhat
+          gpgcheck=0
+          EOF
+          rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
+          amazon-linux-extras install epel -y
+          yum install -y jenkins
+          systemctl enable jenkins
+          systemctl start jenkins
+      Tags:
+        - Key: Name
+          Value: build/jenkins-manager
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.nano
+      SubnetId: !Ref 'PublicSubnet1'
+      SecurityGroupIds: [!Ref 'BastionSecurityGroup']
+      ImageId: !Ref 'LatestAmiId'
+      IamInstanceProfile: !Ref DefaultInstanceProfile
+      KeyName: !Ref KeyName
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+      Tags:
+        - Key: Name
+          Value: build/bastion
+
+# ASG on spot for workers
+  SpotWorkersASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      DesiredCapacity: '1'      
+      MaxSize: '2'
+      MinSize: '0'
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandBaseCapacity: 0
+          OnDemandPercentageAboveBaseCapacity: 0
+          SpotAllocationStrategy: capacity-optimized-prioritized
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId:
+              Ref: SpotWorkerLaunchTemplate
+            Version: '1'
+          Overrides:
+            - InstanceType: c5.4xlarge
+            - InstanceType: c5a.4xlarge
+            - InstanceType: c5n.4xlarge
+            - InstanceType: c5ad.4xlarge
+            - InstanceType: c5d.4xlarge
+            - InstanceType: c4.4xlarge
+            - InstanceType: m5.4xlarge
+            - InstanceType: m5a.4xlarge
+            - InstanceType: m4.4xlarge  
+            - InstanceType: m5n.4xlarge
+      VPCZoneIdentifier:
+      - Ref: PrivateSubnet1
+      - Ref: PrivateSubnet2
+      - Ref: PrivateSubnet3
+  SpotWorkerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: build/spot-worker-lt
+      LaunchTemplateData:
+        ImageId: !Ref 'LatestAmiId'
+        BlockDeviceMappings: 
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+        IamInstanceProfile:
+          Name: !Ref SpotAgentProfile
+        SecurityGroupIds:
+          - !Ref SpotWorkersSecurityGroup
+        KeyName: !Ref KeyName
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            yum install -y java git
+        TagSpecifications:
+        - ResourceType: instance
+          Tags:
+          - Key: Name
+            Value: build/spot-worker
+
+# # ECR registry
+#   ECRUnityRegistry:
+#     Type: AWS::ECR::Repository
+#     Properties:
+#       RepositoryName: "aws-unity-build"
+
+Outputs:
+  BastionHost:
+    Description: Bastion hostname
+    Value: !GetAtt BastionInstance.PublicDnsName
+  JenkinsHost:
+    Description: Jenkins manager
+    Value: !GetAtt JenkinsManagerInstance.PrivateDnsName
+  MacSecurityGroup:
+    Description: SG ID for EC2 Mac
+    Value: !Ref MacSecurityGroup
+  MacIamInstanceProfile:
+    Description: IAM instance profile for EC2 Mac
+    Value: !Ref MacInstanceProfile
+  JenkinsManagerRoleArn:
+    Description: ARN of Jenkins manager role (to be used with EC2 Fleet Jenkins plugin)
+    Value: !GetAtt JenkinsManagerRole.Arn
+  # ECRRegistry:
+  #   Description: ECR registry to store Unity docker images
+  #   Value: !Ref ECRUnityRegistry
+  # SSHCommand:
+  #   Description: Command to setup SSH-tunnels to Mac and Jenkins through the bastion host
+  #   Value: TBD
