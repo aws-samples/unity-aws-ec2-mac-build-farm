@@ -1,0 +1,863 @@
+info:
+  title: Beginner Level Pack
+  description: Introduces the player to the game
+  version: 1.4
+  
+  availableLanguages:
+    - english
+    - chinese
+    - japanese
+    - french
+    - spanish
+    - russian
+
+currentLevel: 0
+
+currentLanguage: default
+
+localization:
+  english:
+    music: Music
+    sfx: Sound Effects
+    credit: A game by Hyperparticle
+    version: v1.1.1
+  chinese:
+    music: 音乐
+    sfx: 音效
+    credit: 本游戏由Hyperparticle开发
+    version: 版本1.1.1
+  japanese:
+  french:
+    music: Musique
+    sfx: Effets sonores
+    credit: Un jeu de Hyperparticle
+    version: v1.1.1
+  spanish:
+    music: Música
+    sfx: Efectos de sonido
+    credit: Un juego de Hyperparticle.
+    version: v1.1.1  
+  russian:
+    music: Музыка
+    sfx: Звуковые эффекты
+    credit: Игра от Hyperparticle
+    version: в 1.1.1
+
+levels:
+  - name: First Steps
+    description: Moving in a straight line
+    
+#    moves: 0          # The starting number of moves
+#    timeElapsed: 0.0  # The amount of seconds elapsed for this level represented as a floating point double
+#    movesBestScore: 0 # The minimum number of moves played over all level completions
+#    winCount: 0       # The number of times this level has been completed
+
+    nodes:     # A list of nodes
+      - [0, 0] # Nodes are constructed by specifying their [x, y] coordinates
+      - [1, 0]
+      - [2, 0]
+      - [3, 0]
+      - [4, 0]
+      - [5, 0]
+#    startNode: [0, 0]  # The position of the start and final nodes. If left out, they are
+#    finalNode: [5, 0]  # assumed as the first and last nodes in the nodes list above
+#    startPull: None    # The direction specifying an initial pull move on the arc connected to the start node
+
+    arcs:                # A list of arcs
+      - parent: [0, 0]   # Arcs are constructed by specifying parent node coordinates
+        direction: Right # and the direction it points to (Left, Right, Up, or Down)
+        
+    tutorial:            # A tutorial is a sequence of push/pull moves
+      - parent: [1, 0]   # A move is given by the parent node coordinates and the direction of the move
+        direction: Right # The type of move (push/pull) is assumed to be in an alternating sequence
+      - parent: [1, 0]
+        direction: Right
+      - parent: [2, 0]
+        direction: Right
+      - parent: [2, 0]
+        direction: Right
+      - parent: [3, 0]
+        direction: Right
+      - parent: [3, 0]
+        direction: Right
+      - parent: [4, 0]
+        direction: Right
+      - parent: [4, 0]
+        direction: Right
+      
+    localization:
+      english: First Steps
+      chinese: 初试身手
+      japanese: 
+      french: Premiers pas
+      spanish: Primeros pasos
+      russian: Первые шаги
+    
+  - name: Roundabout
+    description: Moving in different directions
+    nodes:
+      - [0, 1]
+      - [1, 1]
+      - [1, 2]
+      - [2, 2]
+      - [3, 0]
+      - [3, 1]
+      - [3, 2]
+      - [4, 0]
+    arcs:
+      - parent: [0, 1]
+        direction: Right
+    tutorial:
+      - parent: [1, 1]
+        direction: Right
+      - parent: [1, 1]
+        direction: Up
+      - parent: [1, 2]
+        direction: Up 
+      - parent: [1, 2]
+        direction: Right
+      - parent: [2, 2]
+        direction: Right
+      - parent: [2, 2]
+        direction: Right
+      - parent: [3, 2]
+        direction: Right
+      - parent: [3, 2]
+        direction: Down
+      - parent: [3, 1]
+        direction: Down
+      - parent: [3, 1]
+        direction: Down
+      - parent: [3, 0]
+        direction: Down
+      - parent: [3, 0]
+        direction: Right
+    localization:
+      english: Roundabout
+      chinese: 按部就班
+      japanese: 
+      french: Rond point
+      spanish: Rotonda
+      russian: Карусель
+      
+  - name: Pieces
+    description: Multiple pieces
+    nodes:
+      - [0, 3]
+      - [1, 0]
+      - [1, 2]
+      - [2, 0]
+      - [2, 3]
+      - [3, 2]
+      - [4, 2]
+      - [4, 3]
+      - [5, 0]
+    arcs:
+      - parent: [0, 3]
+        direction: Right 
+      - parent: [1, 0]
+        direction: Right 
+      - parent: [1, 2]
+        direction: Right 
+      - parent: [2, 0]
+        direction: Right 
+      - parent: [4, 2]
+        direction: Up
+    tutorial:
+      - parent: [2, 3]
+        direction: Right
+      - parent: [2, 3]
+        direction: Right
+      - parent: [4, 2]
+        direction: Down
+      - parent: [4, 2]
+        direction: Left
+      - parent: [1, 2]
+        direction: Left
+      - parent: [1, 2]
+        direction: Down
+    localization:
+      english: Pieces
+      chinese: 七拼八凑
+      japanese: 
+      french: Pièces
+      spanish: Piezas
+      russian: Фишки
+
+  - name: Bridge
+    description: Jumping over pieces
+    nodes:
+      - [0, 2]
+      - [1, 2]
+      - [3, 2]
+      - [4, 0]
+      - [4, 2]
+      - [6, 0]
+      - [6, 1]
+    arcs:
+      - parent: [0, 2]
+        direction: Right
+      - parent: [1, 2]
+        direction: Right
+      - parent: [4, 0]
+        direction: Up
+      - parent: [4, 0]
+        direction: Right
+    tutorial:
+      - parent: [1, 2]
+        direction: Right
+      - parent: [3, 2]
+        direction: Right
+      - parent: [4, 2]
+        direction: Right
+      - parent: [6, 0]
+        direction: Up
+    localization:
+      english: Bridge
+      chinese: 搭桥补路
+      japanese: 
+      french: Pont
+      spanish: Puente
+      russian: Мост
+    
+        
+  - name: Ladder
+    description: Move the big piece down
+    nodes:
+      - [0, 2]
+      - [1, 0]
+      - [1, 1]
+      - [1, 2]
+      - [3, 0]
+      - [3, 1]
+      - [3, 2]
+      - [5, 0]
+    arcs:
+      - parent: [0, 2]
+        direction: Right
+      - parent: [1, 2]
+        direction: Right
+    localization:
+      english: Ladder
+      chinese: 历阶而下
+      japanese: 
+      french: Échelle
+      spanish: Escalera
+      russian: Ступени
+
+  - name: Broken
+    description: A bit harder this time
+    nodes:
+      - [0, 2]
+      - [1, 0]
+      - [1, 1]
+      - [1, 2]
+      - [3, 0]
+      - [3, 1]
+      - [4, 0]
+      - [4, 2]
+    arcs:
+      - parent: [0, 2]
+        direction: Right
+      - parent: [1, 1]
+        direction: Right
+    localization:
+      english: Broken
+      chinese: 移东补西
+      japanese: 
+      french: Cassé
+      spanish: Roto
+      russian: Сломанная
+
+  - name: Barrier
+    description: Need to remove the obstacle
+    nodes:
+      - [0, 1]
+      - [2, 0]
+      - [2, 1]
+      - [3, 0]
+      - [3, 2]
+      - [4, 1]
+      - [5, 0]
+      - [6, 1]
+    arcs:
+      - parent: [0, 1]
+        direction: Right
+      - parent: [2, 0]
+        direction: Up
+      - parent: [3, 0]
+        direction: Up
+    localization:
+      english: Barrier
+      chinese: 跨越障碍
+      japanese: 
+      french: Barrière
+      spanish: Barrera
+      russian: Барьер
+
+  - name: Loop
+    description: A Simple Challenge
+    nodes:
+      - [0, 1]
+      - [1, 2]
+      - [1, 1]
+      - [1, 0]
+      - [2, 0]
+      - [3, 1]
+      - [4, 0]
+      - [4, 2]
+      - [5, 0]
+      - [6, 1]
+    arcs:
+      - parent: [0, 1]
+        direction: Right
+      - parent: [1, 2]
+        direction: Right
+      - parent: [2, 0]
+        direction: Right
+    localization:
+      english: Loop
+      chinese: 绕了一圈
+      japanese: 
+      french: Circuit
+      spanish: Circuito
+      russian: Петля
+
+
+  - name: Back and Forth
+    description: tbd
+    nodes:
+      - [0, 1]
+      - [1, 0]
+      - [1, 2]
+      - [2, 1]
+      - [3, 0]
+      - [4, 1]
+      - [4, 2]
+      - [5, 2]
+      - [6, 0]
+      - [6, 1]
+      - [8, 0]
+      - [8, 2]
+      - [9, 1]
+    arcs:
+      - parent: [0, 1]
+        direction: Right
+      - parent: [5, 2]
+        direction: Right
+      - parent: [6, 0]
+        direction: Up
+    localization:
+      english: Back and Forth
+      chinese: 来来回回
+      japanese: 
+      french: D'avant en arrière
+      spanish: De un lado a otro
+      russian: Назад и вперед
+
+  - name: Switcheroo
+    description: tbd
+    nodes:
+      - [0, 1]
+      - [1, 2]
+      - [2, 0]
+      - [2, 1]
+      - [4, 1]
+      - [4, 2]
+      - [5, 0]
+      - [5, 2]
+      - [6, 0]
+      - [6, 1]
+      - [8, 0]
+      - [8, 2]
+      - [9, 1]
+    arcs:
+      - parent: [0, 1]
+        direction: Right
+      - parent: [2, 0]
+        direction: Right
+      - parent: [4, 1]
+        direction: Up
+    localization:
+      english: Switcheroo
+      chinese: 出其不意
+      japanese: 
+      french: Changement Inattendu
+      spanish: Cambio inesperado
+      russian: Туда Сюда
+
+  - name: Patience
+    description: tbd
+    nodes:
+      - [0, 1]
+      - [1, 0]
+      - [1, 2]
+      - [2, 1]
+      - [2, 2]
+      - [4, 0]
+      - [4, 2]
+      - [5, 0]
+      - [5, 1]
+      - [6, 2]
+      - [7, 1]
+      - [7, 2]
+      - [8, 0]
+      - [9, 1]
+    arcs:
+      - parent: [0, 1]
+        direction: Right
+      - parent: [1, 0]
+        direction: Right
+      - parent: [2, 1]
+        direction: Up
+    localization:
+      english: Patience
+      chinese: 柳暗花明
+      japanese: 
+      french: Patience
+      spanish: Paciencia
+      russian: Терпение
+      
+  - name: Slick
+    description: tbd
+    nodes:
+      - [0, 1]
+      - [1, 2]
+      - [2, 0]
+      - [3, 1]
+      - [3, 2]
+      - [4, 0]
+      - [4, 1]
+      - [6, 0]
+      - [6, 2]
+      - [7, 0]
+      - [7, 1]
+      - [8, 2]
+      - [9, 1]
+    arcs:
+      - parent: [0, 1]
+        direction: Right
+      - parent: [1, 2]
+        direction: Right
+      - parent: [3, 1]
+        direction: Up
+    localization:
+      english: Slick
+      chinese: 熟能生巧
+      japanese: 
+      french: Glissant
+      spanish: Astuto
+      russian: Шустро
+
+  - name: Deep End
+    description: Original Plank Puzzle (1)
+    nodes:
+      - [0, 3]
+      - [1, 0]
+      - [1, 1]
+      - [1, 4]
+      - [2, 0]
+      - [2, 2]
+      - [2, 3]
+      - [2, 4]
+      - [3, 1]
+      - [3, 2]
+      - [4, 0]
+      - [4, 3]
+      - [5, 0]
+      - [5, 2]
+      - [5, 3]
+      - [5, 4]
+      - [6, 1]
+    arcs:
+      - parent: [0, 3]
+        direction: Right
+      - parent: [1, 0]
+        direction: Right
+      - parent: [4, 0]
+        direction: Up
+
+  - name: Staircase
+    description: tbd
+    nodes:
+      - [0, 2]
+      - [1, 0]
+      - [1, 1]
+      - [1, 3]
+      - [1, 4]
+      - [2, 2]
+      - [2, 4]
+      - [3, 1]
+      - [3, 2]
+      - [3, 3]
+      - [4, 0]
+      - [4, 1]
+      - [4, 4]
+      - [5, 0]
+      - [5, 3]
+      - [6, 2]
+    arcs:
+      - parent: [0, 2]
+        direction: Right
+      - parent: [1, 4]
+        direction: Right
+      - parent: [5, 0]
+        direction: Up
+    localization:
+      english: Deep End
+      chinese: 窘境脱困
+      japanese: 
+      french: Profondeur
+      spanish: En aguas profundas
+      russian: Глубокий Конец
+  
+  - name: Six Squared
+    description: tbd
+    nodes:
+      - [0, 3]
+      - [1, 0]
+      - [1, 1]
+      - [1, 2]
+      - [1, 4]
+      - [2, 1]
+      - [2, 3]
+      - [3, 1]
+      - [3, 4]
+      - [3, 5]
+      - [4, 0]
+      - [4, 2]
+      - [4, 3]
+      - [4, 4]
+      - [5, 1]
+      - [5, 2]
+      - [5, 4]
+      - [6, 0]
+      - [6, 3]
+      - [6, 5]
+      - [7, 0]
+    arcs:
+      - parent: [0, 3]
+        direction: Right
+      - parent: [3, 4]
+        direction: Right
+      - parent: [3, 5]
+        direction: Right
+    localization:
+      english: Staircase
+      chinese: 拾级而上
+      japanese: 
+      french: Escalier
+      spanish: Escalera
+      russian: Лестница
+
+  - name: Expressway
+    description: tbd
+    nodes:
+      - [0, 4]
+      - [1, 0]
+      - [1, 1]
+      - [1, 2]
+      - [1, 5]
+      - [1, 6]
+      - [2, 0]
+      - [2, 2]
+      - [2, 4]
+      - [2, 5]
+      - [3, 1]
+      - [3, 2]
+      - [3, 3]
+      - [3, 5]
+      - [3, 6]
+      - [4, 0]
+      - [4, 2]
+      - [5, 0]
+      - [5, 1]
+      - [5, 3]
+      - [5, 4]
+      - [6, 1]
+      - [6, 3]
+      - [6, 6]
+      - [7, 0]
+      - [7, 2]
+      - [7, 3]
+      - [7, 6]
+      - [8, 4]
+    arcs:
+      - parent: [0, 4]
+        direction: Right
+      - parent: [3, 2]
+        direction: Right 
+      - parent: [4, 2]
+        direction: Right 
+    localization:
+      english: Six Squared
+      chinese: 六的平方
+      japanese: 
+      french: Six carrés
+      spanish: Seis al cuadrado
+      russian: Шесть квадратов
+  
+  - name: Box Step 
+    description: tbd
+    nodes:
+      - [0, 5]
+      - [1, 0]
+      - [1, 3]
+      - [1, 6]
+      - [2, 0]
+      - [2, 1]
+      - [2, 4]
+      - [3, 2]
+      - [3, 3]
+      - [3, 4]
+      - [3, 5]
+      - [3, 6]
+      - [4, 2]
+      - [4, 4]
+      - [4, 6]
+      - [5, 0]
+      - [5, 2]
+      - [5, 3]
+      - [5, 4]
+      - [5, 5]
+      - [6, 4]
+      - [7, 3]
+      - [7, 5]
+      - [7, 6]
+      - [8, 2]
+    arcs:
+      - parent: [0, 5]
+        direction: Right
+      - parent: [3, 2]
+        direction: Up
+      - parent: [3, 5]
+        direction: Right 
+    localization:
+      english: Box Step
+      chinese: 收放自如
+      japanese: 
+      french: Le Box Step
+      spanish: Paso de la caja
+      russian: Бокс Степ
+      
+  - name: Brute 66
+    description: tbd
+    nodes:
+      - [0, 5]
+      - [1, 1]
+      - [1, 4]
+      - [1, 6]
+      - [1, 7]
+      - [2, 0]
+      - [2, 3]
+      - [2, 5]
+      - [2, 6]
+      - [2, 7]
+      - [3, 1]
+      - [3, 2]
+      - [3, 4]
+      - [3, 7]
+      - [4, 0]
+      - [4, 3]
+      - [4, 4]
+      - [4, 6]
+      - [5, 2]
+      - [5, 4]
+      - [5, 5]
+      - [6, 1]
+      - [6, 2]
+      - [6, 3]
+      - [6, 6]
+      - [6, 7]
+      - [7, 0]
+      - [7, 2]
+      - [7, 4]
+      - [7, 6]
+      - [7, 7]
+      - [8, 1]
+    arcs:
+      - parent: [0, 5]
+        direction: Right
+      - parent: [1, 6]
+        direction: Up
+      - parent: [6, 3]
+        direction: Up
+    localization:
+      english: Brute 66
+      chinese: 暴力66
+      japanese: 
+      french: Brute 66
+      spanish: Brute 66
+      russian: Брут 66
+
+  - name: Junior
+    description: tbd
+    nodes:
+      - [0, 7]
+      - [1, 1]
+      - [1, 4]
+      - [1, 6]
+      - [1, 7]
+      - [3, 0]
+      - [3, 2]
+      - [3, 7]
+      - [4, 2]
+      - [4, 5]
+      - [4, 7]
+      - [5, 0]
+      - [5, 4]
+      - [5, 6]
+      - [6, 0]
+      - [6, 2]
+      - [6, 3]
+      - [6, 6]
+      - [6, 7]
+      - [7, 0]
+      - [7, 5]
+      - [7, 7]
+      - [8, 0]
+      - [8, 4]
+      - [8, 7]
+      - [9, 2]
+    arcs:
+      - parent: [0, 7]
+        direction: Right
+      - parent: [1, 1]
+        direction: Up
+      - parent: [1, 4]
+        direction: Up 
+      - parent: [5, 0]
+        direction: Up 
+      - parent: [7, 0]
+        direction: Up 
+    localization:
+      english: Junior
+      chinese: 小有所成
+      japanese: 
+      french: Junior
+      spanish: Júnior
+      russian: Юниор
+      
+  - name: Smash Hit
+    description: Original Plank Puzzle (2)
+    nodes:
+      - [0, 5]
+      - [1, 1]
+      - [1, 3]
+      - [1, 4]
+      - [1, 7]
+      - [2, 0]
+      - [2, 3]
+      - [2, 5]
+      - [2, 6]
+      - [2, 7]
+      - [3, 0]
+      - [3, 2]
+      - [3, 4]
+      - [3, 6]
+      - [4, 2]
+      - [4, 3]
+      - [4, 7]
+      - [5, 0]
+      - [5, 1]
+      - [5, 2]
+      - [5, 5]
+      - [6, 0]
+      - [6, 3]
+      - [6, 4]
+      - [6, 5]
+      - [7, 2]
+      - [7, 5]
+      - [7, 7]
+      - [8, 1]
+      - [8, 4]
+      - [8, 6]
+      - [8, 7]
+      - [9, 2]
+    arcs:
+      - parent: [0, 5]
+        direction: Right
+      - parent: [2, 0]
+        direction: Up
+      - parent: [6, 3]
+        direction: Up
+    localization:
+      english: Smash Hit
+      chinese: 平地春雷
+      japanese: 
+      french: Succès foudroyant
+      spanish: Éxito rotundo
+      russian: Шлягер
+
+  - name: Route 66
+    description: Minimum of 66 moves
+    nodes:
+      - [0, 6]
+      - [1, 0]
+      - [1, 1]
+      - [1, 4]
+      - [1, 5]
+      - [1, 8]
+      - [2, 2]
+      - [2, 5]
+      - [3, 1]
+      - [3, 2]
+      - [3, 3]
+      - [3, 6]
+      - [3, 7]
+      - [3, 8]
+      - [4, 0]
+      - [4, 2]
+      - [4, 4]
+      - [4, 5]
+      - [4, 8]
+      - [5, 1]
+      - [5, 5]
+      - [5, 6]
+      - [6, 0]
+      - [6, 3]
+      - [6, 7]
+      - [7, 3]
+      - [7, 4]
+      - [7, 6]
+      - [7, 7]
+      - [8, 1]
+      - [8, 2]
+      - [8, 5]
+      - [8, 8]
+      - [9, 0]
+      - [9, 1]
+      - [9, 3]
+      - [9, 5]
+      - [9, 7]
+      - [10, 2]
+    arcs:
+      - parent: [0, 6]
+        direction: Right
+      - parent: [4, 0]
+        direction: Right
+      - parent: [6, 3]
+        direction: Right
+    localization:
+      english: Route 66
+      chinese: 66号公路
+      japanese: 
+      french: La Route 66
+      spanish: Ruta 66
+      russian: Маршрут 66
+
+#  - name: test
+#    description: test
+
+#  - name: test
+#    description: test
+#    nodes:
+#      - [0, 0]
+#      - [0, 1]
+#      - [0, 2]
+#      - [0, 3]
+#      - [0, 4]
+#      - [0, 5]
+#    arcs:
+#      - parent: [0, 0]
+#        direction: Up
