@@ -30,6 +30,8 @@ Parameters:
     ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
   SSMManagedInstancePolicy:
     Type: String
+    AllowedValues:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
     Description: 'ARN of the AWS-managed AmazonSSMManagedInstanceCore policy to allow SSM-management'
     Default: arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 
@@ -149,6 +151,9 @@ Resources:
               - secretsmanager:ListSecretVersionIds
               - secretsmanager:ListSecrets
             Resource: '*'
+            Condition: 
+              StringEquals:
+                "aws:ResourceTag/TEAM": "DevOps"
 
 # Allow spot worker to pull images from ECR
   # ECRRegistryAccessForAgents:
@@ -216,8 +221,11 @@ Resources:
             Action:
               - 'iam:ListInstanceProfiles'
               - 'iam:ListRoles'
-              - 'iam:PassRole'
             Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'iam:PassRole'
+            Resource: !GetAtt SpotAgentRole.Arn
 
   JenkinsManagerRole: 
     Type: "AWS::IAM::Role"
@@ -259,7 +267,11 @@ Resources:
               - secretsmanager:ListSecretVersionIds
               - secretsmanager:ListSecrets
               - secretsmanager:CreateSecret
+              - secretsmanager:TagResource
             Resource: '*'
+            Condition: 
+              StringEquals:
+                "aws:ResourceTag/TEAM": "DevOps"
 
   MacRole: 
     Type: "AWS::IAM::Role"

@@ -63,6 +63,9 @@ pipeline {
                 # sudo mkdir -p /usr/share/unity3d/config/
                 # endpoint=`aws secretsmanager get-secret-value \
                 #     --secret-id $LICENSE_SERVER_ENDPOINT --output text --query 'SecretString' | cut -d '"' -f4`
+
+
+
                 
                 # configfile='{ 
                 #     "licensingServiceBaseUrl": "'$endpoint'", 

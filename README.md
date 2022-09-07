@@ -14,7 +14,9 @@ There's a CloudFormation template to provision required AWS resources and a guid
 ![Arch diagram](./Unity_build_pipeline.png)
 
 
+Jenkins uses a manager node to orchestrate builds. Build jobs will run either on EC2 Mac that we configured in the Lab 1 or on EC2 Spot instances managed by the EC2 Fleet plugin. Jenkins manager only stores configuration, provides a user interface and orchestrates build jobs.
 
+An EC2 instance for the Jenkins manager is already created in your AWS account, and Jenkins software is already preinstalled. We just need to configure it.
 
 
 

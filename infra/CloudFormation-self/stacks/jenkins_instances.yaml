@@ -11,6 +11,9 @@ Parameters:
   PrivateSubnet2:
     Type: String
     Description: Private Subnet 2 will be passed by the parent stack
+  PrivateSubnet3:
+    Type: String
+    Description: Private Subnet 3 will be passed by the parent stack
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: The EC2 key pair for all instances
@@ -27,6 +30,8 @@ Parameters:
     ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
   SSMManagedInstancePolicy:
     Type: String
+    AllowedValues:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
     Description: 'ARN of the AWS-managed AmazonSSMManagedInstanceCore policy to allow SSM-management'
     Default: arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 
@@ -104,31 +109,6 @@ Resources:
       Tags:
         - Key: Name
           Value: build/mac-sg
-  UnityBuildServerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow REST (80,443,8080) from workers runnning Unity 
-      VpcId: !Ref 'VPCId'
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 22
-        ToPort: 22
-        SourceSecurityGroupId: !Ref BastionSecurityGroup
-      - IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        SourceSecurityGroupId: !Ref SpotWorkersSecurityGroup
-      - IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        SourceSecurityGroupId: !Ref SpotWorkersSecurityGroup
-      - IpProtocol: tcp
-        FromPort: 8080
-        ToPort: 8080
-        SourceSecurityGroupId: !Ref SpotWorkersSecurityGroup
-      Tags:
-        - Key: Name
-          Value: build/jenkins-workers-sg
 
 # IAM roles for instances
 # Default - SSM only (for bastion, etc)
@@ -155,19 +135,39 @@ Resources:
       Roles: 
         - Ref: "DefaultRole"
 
-# Allow spot worker to pull images from ECR
-  ECRRegistryAccessForAgents:
+  #  SpotAgentRole: read Secrets from Secrets Manager
+  SecretsManagerAccessForSpot:
     Type: AWS::IAM::ManagedPolicy
     Properties: 
-      Description: Allow Spot agents to pull docker images from ECR
+      Description: Allow Spot workers access to the Secrets Manager
       PolicyDocument:
         Version: 2012-10-17
         Statement:
           - Effect: Allow
             Action:
-              - ecr:DescribeImages
-              - ecr:DescribeRepositories
-            Resource: !GetAtt ECRUnityRegistry.Arn
+              - secretsmanager:GetResourcePolicy
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+              - secretsmanager:ListSecretVersionIds
+              - secretsmanager:ListSecrets
+            Resource: '*'
+            Condition: 
+              StringEquals:
+                "aws:ResourceTag/TEAM": "DevOps"
+
+# Allow spot worker to pull images from ECR
+  # ECRRegistryAccessForAgents:
+  #   Type: AWS::IAM::ManagedPolicy
+  #   Properties: 
+  #     Description: Allow Spot agents to pull docker images from ECR
+  #     PolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Effect: Allow
+  #           Action:
+  #             - ecr:DescribeImages
+  #             - ecr:DescribeRepositories
+  #           Resource: !GetAtt ECRUnityRegistry.Arn
   SpotAgentRole: 
     Type: "AWS::IAM::Role"
     Properties: 
@@ -184,7 +184,8 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - !Ref SSMManagedInstancePolicy
-        - !Ref ECRRegistryAccessForAgents
+        - !Ref SecretsManagerAccessForSpot
+        # - !Ref ECRRegistryAccessForAgents
   SpotAgentProfile: 
     Type: "AWS::IAM::InstanceProfile"
     Properties: 
@@ -220,8 +221,11 @@ Resources:
             Action:
               - 'iam:ListInstanceProfiles'
               - 'iam:ListRoles'
-              - 'iam:PassRole'
             Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'iam:PassRole'
+            Resource: !GetAtt SpotAgentRole.Arn
 
   JenkinsManagerRole: 
     Type: "AWS::IAM::Role"
@@ -262,7 +266,12 @@ Resources:
               - secretsmanager:DescribeSecret
               - secretsmanager:ListSecretVersionIds
               - secretsmanager:ListSecrets
+              - secretsmanager:CreateSecret
+              - secretsmanager:TagResource
             Resource: '*'
+            Condition: 
+              StringEquals:
+                "aws:ResourceTag/TEAM": "DevOps"
 
   MacRole: 
     Type: "AWS::IAM::Role"
@@ -298,6 +307,10 @@ Resources:
       ImageId: !Ref 'LatestAmiId'
       IamInstanceProfile: !Ref JenkinsManagerInstanceProfile
       KeyName: !Ref KeyName
+      BlockDeviceMappings:
+      - DeviceName: /dev/xvda1
+        Ebs:
+          VolumeSize: 30
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
@@ -317,36 +330,6 @@ Resources:
       Tags:
         - Key: Name
           Value: build/jenkins-manager
-  UnityBuildServerInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t3.small
-      SubnetId: !Ref 'PrivateSubnet1'
-      SecurityGroupIds: [!Ref 'UnityBuildServerSecurityGroup']
-      ImageId: !Ref 'LatestAmiId'
-      IamInstanceProfile: !Ref DefaultInstanceProfile
-      KeyName: !Ref KeyName
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          # yum update -y
-          rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm
-          yum install -y dotnet-runtime-5.0
-      Tags:
-        - Key: Name
-          Value: build/unity_build_server
-  UnityBuildServerEIP:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: build/Unity_Build_Server_EIP
-  UnityBuildServerEIPAssociation:
-    Type: AWS::EC2::EIPAssociation
-    Properties:
-      InstanceId: !Ref 'UnityBuildServerInstance'
-      EIP: !Ref 'UnityBuildServerEIP'
   BastionInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -369,7 +352,7 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       DesiredCapacity: '1'      
-      MaxSize: '3'
+      MaxSize: '2'
       MinSize: '0'
       MixedInstancesPolicy:
         InstancesDistribution:
@@ -395,12 +378,17 @@ Resources:
       VPCZoneIdentifier:
       - Ref: PrivateSubnet1
       - Ref: PrivateSubnet2
+      - Ref: PrivateSubnet3
   SpotWorkerLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: build/spot-worker-lt
       LaunchTemplateData:
         ImageId: !Ref 'LatestAmiId'
+        BlockDeviceMappings: 
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
         IamInstanceProfile:
           Name: !Ref SpotAgentProfile
         SecurityGroupIds:
@@ -416,11 +404,11 @@ Resources:
           - Key: Name
             Value: build/spot-worker
 
-# ECR registry
-  ECRUnityRegistry:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: "aws-unity-build"
+# # ECR registry
+#   ECRUnityRegistry:
+#     Type: AWS::ECR::Repository
+#     Properties:
+#       RepositoryName: "aws-unity-build"
 
 Outputs:
   BastionHost:
@@ -429,9 +417,6 @@ Outputs:
   JenkinsHost:
     Description: Jenkins manager
     Value: !GetAtt JenkinsManagerInstance.PrivateDnsName
-  UnityBuildServerHost:
-    Description: Unity build server
-    Value: !GetAtt UnityBuildServerInstance.PrivateDnsName
   MacSecurityGroup:
     Description: SG ID for EC2 Mac
     Value: !Ref MacSecurityGroup
@@ -441,9 +426,9 @@ Outputs:
   JenkinsManagerRoleArn:
     Description: ARN of Jenkins manager role (to be used with EC2 Fleet Jenkins plugin)
     Value: !GetAtt JenkinsManagerRole.Arn
-  ECRRegistry:
-    Description: ECR registry to store Unity docker images
-    Value: !Ref ECRUnityRegistry
+  # ECRRegistry:
+  #   Description: ECR registry to store Unity docker images
+  #   Value: !Ref ECRUnityRegistry
   # SSHCommand:
   #   Description: Command to setup SSH-tunnels to Mac and Jenkins through the bastion host
   #   Value: TBD
