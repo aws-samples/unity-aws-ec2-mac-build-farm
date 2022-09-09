@@ -57,15 +57,11 @@ pipeline {
                 unzip -o awscliv2.zip 
                 ./aws/install 
                 apt-get install sudo
-
                 # Following section can be uncommented if Unity Build server is used
                 # just to push it through
                 # sudo mkdir -p /usr/share/unity3d/config/
                 # endpoint=`aws secretsmanager get-secret-value \
                 #     --secret-id $LICENSE_SERVER_ENDPOINT --output text --query 'SecretString' | cut -d '"' -f4`
-
-
-
                 
                 # configfile='{ 
                 #     "licensingServiceBaseUrl": "'$endpoint'", 
@@ -74,15 +70,15 @@ pipeline {
                 #     "clientConnectTimeoutSec": 5, 
                 #     "clientHandshakeTimeoutSec": 10 
                 # }'
-
                 # Copying Unity .ulf license file from S3 to container
                 # aws s3 cp "s3://${S3_BUCKET}/Unity_2021.3.6f1-ios-1.0.ulf" "/root/.local/share/unity3d/Unity/Unity_lic.ulf"
-
                 mkdir -p "/root/.local/share/unity3d/Unity"
                 aws secretsmanager get-secret-value --secret-id $UNITY_LICENSE_FILE --output text --query SecretBinary |
                          base64 -d > "/root/.local/share/unity3d/Unity/Unity_lic.ulf"
-
                 echo "===Building Xcode project" 
+                rm nodulus -rf
+                git clone https://github.com/Hyperparticle/nodulus.git
+                cp -nR nodulus/* UnityProjectSample/
                 cd $UNITY_PROJECT_DIR
                 mkdir -p ./iOSProj
                 mkdir -p ./Build/iosBuild
@@ -127,10 +123,7 @@ pipeline {
                 unstash 'xcode-project'
                 sh '''
                 pwd
-
                 ls -l
-
-
                 # Remove old project and unpack a new one
                 rm -rf ${PROJECT_FOLDER}
                 unzip iOSProj.zip
@@ -151,16 +144,13 @@ pipeline {
                 sh '''
                 PATH=$PATH:/usr/local/bin
                 cd ${PROJECT_FOLDER}
-
                 # Update project settings
                 # sed -i "" 's|^#!/bin/sh|#!/bin/bash|' MapFileParser.sh
                 # extra backslash for groovy
                 TEAM_ID=`aws secretsmanager get-secret-value \
                     --secret-id $TEAM_ID_KEY --output text --query 'SecretString' | cut -d '"' -f4`
-
                 # extra backslash for groovy
                 sed -i "" "s/DEVELOPMENT_TEAM = \\"\\"/DEVELOPMENT_TEAM = $TEAM_ID/g" Unity-iPhone.xcodeproj/project.pbxproj
-
                 #############################################
                 # setup certificates in a temporary keychain
                 #############################################
@@ -180,26 +170,22 @@ pipeline {
                 security set-keychain-settings "$MY_KEYCHAIN"
                 # Unlock keychain
                 security unlock-keychain -p "$MY_KEYCHAIN_PASSWORD" "$MY_KEYCHAIN"
-
                 echo "===Importing certs"
                 # Import certs to a keychain; bash process substitution doesn't work with security for some reason
                 aws secretsmanager get-secret-value --secret-id $SIGNING_CERT --output text --query SecretBinary |
                     base64 -d -o /tmp/cert &&
                     security -v import /tmp/cert -k "$MY_KEYCHAIN" -T "/usr/bin/codesign"
                 rm /tmp/cert
-
                 PASSPHRASE=`aws secretsmanager get-secret-value \
                     --secret-id $SIGNING_CERT_PRIV_KEY_PASSPHRASE --output text --query 'SecretString' | cut -d '"' -f4`
                 aws secretsmanager get-secret-value --secret-id $SIGNING_CERT_PRIV_KEY --output text --query SecretBinary |
                     base64 -d -o /tmp/priv.p12 &&
                     security -v import /tmp/priv.p12 -k "$MY_KEYCHAIN" -P "$PASSPHRASE" -t priv -T "/usr/bin/codesign" 
                 rm /tmp/priv.p12; PASSPHRASE=''
-
                 #aws secretsmanager get-secret-value --secret-id $APPLE_WWDR_CERT --output text --query SecretBinary |
                 #    base64 -d -o /tmp/cert &&
                 #    security -v import /tmp/cert -k "$MY_KEYCHAIN"
                 #rm /tmp/cert
-
                 # Dump keychain for debug
                 security dump-keychain "$MY_KEYCHAIN"
                 # Set partition list (ACL) for a key
@@ -210,7 +196,6 @@ pipeline {
                 CODE_SIGN_IDENTITY=`security find-identity -v -p codesigning $MY_KEYCHAIN | awk '/ *1\\)/ {print $2}'`
                 echo code signing identity is $CODE_SIGN_IDENTITY
                 security default-keychain -s $MY_KEYCHAIN
-
                 #############################################
                 # setup provisioning profile
                 #############################################
@@ -225,7 +210,6 @@ pipeline {
                 #     aws secretsmanager get-secret-value --secret-id $PROVISIONING_PROFILE --output text --query SecretBinary |
                 #         base64 -d -o "${PROV_PROFILE_FILENAME}"
                 # fi
-
                 # # lock, since multiple jobs can use the same provisioning profile
                 # if [ -f "${PROV_PROFILE_FILENAME}.lock" ]; then
                 #     n=`cat "${PROV_PROFILE_FILENAME}.lock"`
@@ -235,16 +219,13 @@ pipeline {
                 # fi
                 # echo $n > "${PROV_PROFILE_FILENAME}.lock" 
                 
-
                 #############################################
                 # Build
                 #############################################
                 echo ===Building 
                 pwd
                 # xcodebuild -scheme Unity-iPhone -sdk iphoneos -configuration AppStoreDistribution archive -archivePath "$PWD/build/Unity-iPhone.xcarchive" CODE_SIGN_STYLE="Manual" PROVISIONING_PROFILE_SPECIFIER_APP="$PROVISIONING_PROFILE_NAME" CODE_SIGN_IDENTITY=$CODE_SIGN_IDENTITY OTHER_CODE_SIGN_FLAGS="--keychain=$MY_KEYCHAIN" -UseModernBuildSystem=0
-
                 xcodebuild -scheme Unity-iPhone -sdk iphoneos -configuration AppStoreDistribution archive -archivePath "$PWD/build/Unity-iPhone.xcarchive" CODE_SIGN_STYLE="Manual" CODE_SIGN_IDENTITY=$CODE_SIGN_IDENTITY OTHER_CODE_SIGN_FLAGS="--keychain=$MY_KEYCHAIN" -UseModernBuildSystem=0 CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO 
-
                 # Generate ipa
                 echo ===Exporting ipa
                 pwd
@@ -256,7 +237,6 @@ pipeline {
                 #############################################
                 # Upload to S3
                 # /usr/local/bin/aws s3 cp ./build/*.ipa s3://${S3_BUCKET}/ 
-
                 #############################################
                 # Cleanup
                 #############################################
