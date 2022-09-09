@@ -76,6 +76,9 @@ pipeline {
                 aws secretsmanager get-secret-value --secret-id $UNITY_LICENSE_FILE --output text --query SecretBinary |
                          base64 -d > "/root/.local/share/unity3d/Unity/Unity_lic.ulf"
                 echo "===Building Xcode project" 
+		# We also pull in additional repository with actual Unity Project. 
+		# We have several configuration files for our build configuration 
+		# You can find those in UnityProjectSample folder
                 rm nodulus -rf
                 git clone https://github.com/Hyperparticle/nodulus.git
                 cp -nR nodulus/* UnityProjectSample/
