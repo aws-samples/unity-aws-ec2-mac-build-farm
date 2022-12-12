@@ -22,7 +22,7 @@ pipeline {
     environment {
         UNITY_PROJECT_DIR='UnityProjectSample'
         IMAGE='unityci/editor'
-        UNITY_VERSION='2021.3.6f1-ios-1.0'
+        UNITY_VERSION='2020.2.4f1-ios-1.0'
         // Build parameters
         UNITY_LICENSE_FILE='UNITY_LICENSE_FILE'
         PROVISIONING_PROFILE_NAME='UnityBuildSample-profile'
