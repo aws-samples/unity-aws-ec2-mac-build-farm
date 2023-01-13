@@ -1,0 +1,89 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Build Unity sample project for iOS"
+  lane :build do |options|
+    # Create a temporary keychain for the certificates and unlock it
+    create_keychain(
+      name: "teamcity",
+      password: "teamcity",
+      default_keychain: false,
+      unlock: true,
+      timeout: 3600
+    )
+
+    # Import the developer's private key
+    import_certificate(
+      certificate_path: File.absolute_path("tmp/private.p12"),
+      certificate_password: options[:certificate_password],
+      keychain_name: "teamcity",
+      keychain_password: "teamcity"
+    )
+
+    # Import the developer's signing certificate
+    import_certificate(
+      certificate_path: File.absolute_path("tmp/signing.cer"),
+      keychain_name: "teamcity",
+      keychain_password: "teamcity"
+    )
+
+    # Also import the 6 Apple CA certificates
+    import_certificate(
+      certificate_path: File.absolute_path("tmp/AppleWWDRCA.cer"),
+      keychain_name: "teamcity",
+      keychain_password: "teamcity"
+    )
+    import_certificate(
+      certificate_path: File.absolute_path("tmp/AppleWWDRCAG2.cer"),
+      keychain_name: "teamcity",
+      keychain_password: "teamcity"
+    )
+    import_certificate(
+      certificate_path: File.absolute_path("tmp/AppleWWDRCAG3.cer"),
+      keychain_name: "teamcity",
+      keychain_password: "teamcity"
+    )
+    import_certificate(
+      certificate_path: File.absolute_path("tmp/AppleWWDRCAG4.cer"),
+      keychain_name: "teamcity",
+      keychain_password: "teamcity"
+    )
+    import_certificate(
+      certificate_path: File.absolute_path("tmp/AppleWWDRCAG5.cer"),
+      keychain_name: "teamcity",
+      keychain_password: "teamcity"
+    )
+    import_certificate(
+      certificate_path: File.absolute_path("tmp/AppleWWDRCAG6.cer"),
+      keychain_name: "teamcity",
+      keychain_password: "teamcity"
+    )
+
+    # Install the developer's provisioning profile
+    install_provisioning_profile(
+      path: File.absolute_path("tmp/UnityProject.mobileprovision")
+    )
+
+    # Update the project and code signing settings
+    update_code_signing_settings(
+      path: "Unity-iPhone.xcodeproj",
+      use_automatic_signing: false,
+      team_id: options[:team_id],
+      bundle_identifier: options[:bundle_identifier],
+      code_sign_identity: "Apple Distribution",
+      profile_name: options[:provisioning_profile_name],
+      targets: "Unity-iPhone"
+    )
+
+    build_app(
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: {
+          options[:bundle_identifier] => options[:provisioning_profile_name],
+          "com.unity3d.framework" => ""
+        }
+      },
+      configuration: "Release"
+    )
+  end
+end
