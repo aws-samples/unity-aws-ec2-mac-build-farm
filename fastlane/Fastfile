@@ -1,8 +1,8 @@
 default_platform(:ios)
 
 platform :ios do
-  desc "Build Unity sample project for iOS"
-  lane :build do |options|
+  desc "Build signed Unity sample project for iOS"
+  lane :build_ipa do |options|
     # Create a temporary keychain for the certificates and unlock it
     create_keychain(
       name: "teamcity",
@@ -70,7 +70,7 @@ platform :ios do
       use_automatic_signing: false,
       team_id: options[:team_id],
       bundle_identifier: options[:bundle_identifier],
-      code_sign_identity: "Apple Distribution",
+      code_sign_identity: options[:code_sign_identity],
       profile_name: options[:provisioning_profile_name],
       targets: "Unity-iPhone"
     )
@@ -82,8 +82,17 @@ platform :ios do
           options[:bundle_identifier] => options[:provisioning_profile_name],
           "com.unity3d.framework" => ""
         }
-      },
-      configuration: "Release"
+      }
+    )
+  end
+
+  desc "Build unsigned archive Unity sample project for iOS"
+  lane :build_xcarchive do
+    build_app(
+      archive_path: "build/Nodulus.xcarchive",
+      export_method: "app-store",
+      skip_codesigning: true,
+      skip_package_ipa: true
     )
   end
 end
