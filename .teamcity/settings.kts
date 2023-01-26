@@ -213,11 +213,11 @@ object BuildIOSApp : BuildType({
                     PROFILE_NAME=`/usr/libexec/PlistBuddy -c "Print :Name" fastlane/tmp/App.plist`
                     
                     fastlane build_ipa \
-                        bundle_identifier:${'$'}APP_BUNDLE \
-                        code_sign_identity:%AppleCodeSignIdentity% \
-                        certificate_password:${'$'}PASSPHRASE \
-                        provisioning_profile_name:${'$'}PROFILE_NAME \
-                        team_id:${'$'}TEAM_ID
+                        bundle_identifier:"${'$'}APP_BUNDLE" \
+                        code_sign_identity:"%AppleCodeSignIdentity%" \
+                        certificate_password:"${'$'}PASSPHRASE" \
+                        provisioning_profile_name:"${'$'}PROFILE_NAME" \
+                        team_id:"${'$'}TEAM_ID"
                 fi
             """.trimIndent()
         }
