@@ -21,6 +21,9 @@ project {
     params {
         // Enable the TeamCity build cache feature
         param("teamcity.internal.feature.build.cache.enabled", "true")
+
+        // Set the default code sign identity (e.g. "Apple Development" or "Apple Distribution")
+        param("AppleCodeSignIdentity", "Apple Distribution")
     }
 
     features {
@@ -109,7 +112,8 @@ object BuildIOSApp : BuildType({
     name = "Build iOS App"
 
     artifactRules = """
-        Nodulus.ipa
+        Nodulus.ipa => Nodulus.zip
+        build => Nodulus.zip
     """.trimIndent()
 
     params {
@@ -118,7 +122,7 @@ object BuildIOSApp : BuildType({
     }
 
     vcs {
-        root(UnityDemo, "-:.")
+        root(UnityDemo, "+:fastlane")
     }
 
     triggers {
@@ -175,32 +179,46 @@ object BuildIOSApp : BuildType({
         script {
             name = "Run Fastlane build"
             scriptContent = """
-                TEAM_ID=`aws secretsmanager get-secret-value \
-                    --secret-id TEAM_ID \
+                PROVISIONING_PROFILE=`aws secretsmanager get-secret-value \
+                    --secret-id PROVISIONING_PROFILE \
                     --output text \
-                    --query 'SecretString' | cut -d '"' -f4`
+                    --query 'Name'`
+                
+                if [ -z "${'$'}PROVISIONING_PROFILE" ]; then
+                    echo "Provisioning profile does not exist - generating an unsigned xcarchive"
                     
-                APP_BUNDLE=`aws secretsmanager get-secret-value \
-                    --secret-id APP_BUNDLE \
-                    --output text \
-                    --query 'SecretString' | cut -d '"' -f4`
+                    fastlane build_xcarchive
+                else
+                    echo "Provisioning profile exists - generating a signed IPA"
                     
-                PASSPHRASE=`aws secretsmanager get-secret-value \
-                    --secret-id SIGNING_CERT_PRIV_KEY_PASSPHRASE \
-                    --output text \
-                    --query 'SecretString' | cut -d '"' -f4`
-                
-                # Decode provisioning profile (to get its name)
-                security cms -D -i fastlane/tmp/UnityProject.mobileprovision > fastlane/tmp/App.plist
-                
-                # Extract name from decoded provisioning profile
-                PROFILE_NAME=`/usr/libexec/PlistBuddy -c "Print :Name" fastlane/tmp/App.plist`
-                
-                fastlane build \
-                    bundle_identifier:${'$'}APP_BUNDLE \
-                    certificate_password:${'$'}PASSPHRASE \
-                    provisioning_profile_name:${'$'}PROFILE_NAME \
-                    team_id:${'$'}TEAM_ID
+                    TEAM_ID=`aws secretsmanager get-secret-value \
+                        --secret-id TEAM_ID \
+                        --output text \
+                        --query 'SecretString' | cut -d '"' -f4`
+                                    
+                    APP_BUNDLE=`aws secretsmanager get-secret-value \
+                        --secret-id APP_BUNDLE \
+                        --output text \
+                        --query 'SecretString' | cut -d '"' -f4`
+                                    
+                    PASSPHRASE=`aws secretsmanager get-secret-value \
+                        --secret-id SIGNING_CERT_PRIV_KEY_PASSPHRASE \
+                        --output text \
+                        --query 'SecretString' | cut -d '"' -f4`
+                                
+                    # Decode provisioning profile (to get its name)
+                    security cms -D -i fastlane/tmp/UnityProject.mobileprovision > fastlane/tmp/App.plist
+                                
+                    # Extract name from decoded provisioning profile
+                    PROFILE_NAME=`/usr/libexec/PlistBuddy -c "Print :Name" fastlane/tmp/App.plist`
+                    
+                    fastlane build_ipa \
+                        bundle_identifier:${'$'}APP_BUNDLE \
+                        code_sign_identity:%AppleCodeSignIdentity% \
+                        certificate_password:${'$'}PASSPHRASE \
+                        provisioning_profile_name:${'$'}PROFILE_NAME \
+                        team_id:${'$'}TEAM_ID
+                fi
             """.trimIndent()
         }
     }
