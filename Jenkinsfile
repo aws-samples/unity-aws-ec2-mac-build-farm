@@ -57,7 +57,6 @@ pipeline {
                 unzip -o awscliv2.zip 
                 ./aws/install 
                 apt-get install sudo
-		
                 # Following section can be uncommented if Unity Build server is used
                 # just to push it through
                 # sudo mkdir -p /usr/share/unity3d/config/
@@ -71,9 +70,6 @@ pipeline {
                 #     "clientConnectTimeoutSec": 5, 
                 #     "clientHandshakeTimeoutSec": 10 
                 # }'
-		# echo $configfile | sudo tee /usr/share/unity3d/config/services-config.json
-		
-		# If you have physical license file, then uncomment the following line
                 # Copying Unity .ulf license file from S3 to container
                 # aws s3 cp "s3://${S3_BUCKET}/Unity_2021.3.6f1-ios-1.0.ulf" "/root/.local/share/unity3d/Unity/Unity_lic.ulf"
                 mkdir -p "/root/.local/share/unity3d/Unity"
@@ -283,4 +279,34 @@ pipeline {
             echo 'Failed :('
         }
     }
+}
+
+
+
+
+
+
+using System;
+using System.IO;
+using System.Linq;
+using NextGames.CI;
+using UnityEditor;
+using System.Collections.Generic;
+class ExportTool
+{
+	static void ExportXcodeProject ()
+	{
+		EditorUserBuildSettings.SwitchActiveBuildTarget (BuildTargetGroup.iOS, BuildTarget.iOS);
+		List<string> scenes = new List<string>();
+		for (int i = 0; i < EditorBuildSettings.scenes.Length; i++) 
+		{
+			if (EditorBuildSettings.scenes [i].enabled)
+			{
+				scenes.Add (EditorBuildSettings.scenes [i].path);
+			}
+		}
+
+		BuildPipeline.BuildPlayer (scenes.ToArray (), "iOSProj", BuildTarget.iOS, BuildOptions.None);
+		CommandLineMethods.BuildCurrentPlatform();
+	}
 }

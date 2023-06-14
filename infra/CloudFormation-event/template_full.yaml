@@ -553,16 +553,13 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
           # yum update -y
-          sudo amazon-linux-extras install java-openjdk11 -y
+          wget -O /etc/yum.repos.d/jenkins.repo \
+            https://pkg.jenkins.io/redhat-stable/jenkins.repo
           yum install -y git 
-          sudo tee /etc/yum.repos.d/jenkins.repo<<EOF
-          [jenkins]
-          name=Jenkins
-          baseurl=http://pkg.jenkins.io/redhat
-          gpgcheck=0
-          EOF
-          rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
-          amazon-linux-extras install epel -y
+          rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+          yum upgrade -y
+          sudo amazon-linux-extras install java-openjdk11 -y
+          sudo amazon-linux-extras install epel -y
           yum install -y jenkins
           systemctl enable jenkins
           systemctl start jenkins
