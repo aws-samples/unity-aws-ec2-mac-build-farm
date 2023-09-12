@@ -28,7 +28,9 @@ class ExportTool
 		PlayerSettings.applicationIdentifier = "com.evgeniik.samples.UnityBuildSample";
 		EditorUserBuildSettings.SwitchActiveBuildTarget (BuildTarget.iOS);
 
-		EditorUserBuildSettings.symlinkSources = true;
+		// not available in Unity 2020.2
+		// https://docs.unity3d.com/2020.2/Documentation/ScriptReference/EditorUserBuildSettings.html
+		// EditorUserBuildSettings.symlinkSources = true;
 		EditorUserBuildSettings.development = true;
 		EditorUserBuildSettings.allowDebugging = true;
 
